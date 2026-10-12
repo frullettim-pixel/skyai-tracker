@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyAI - Satellite Tracker</title>
+    
+    <!-- PWA Manifest integrato direttamente nel codice -->
+    <link rel="manifest" href='data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22SkyAI%20Satellite%20Tracker%22%2C%22short_name%22%3A%22SkyAI%22%2C%22start_url%22%3A%22index.html%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230b0f19%22%2C%22theme_color%22%3A%22%230b0f19%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22https%3A%2F%2Fcdnjs.cloudflare.com%2Fajax%2Flibs%2Ffont-awesome%2F6.4.0%2Fsvgs%2Fsolid%2Fsatellite.svg%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D'>
+    <meta name="theme-color" content="#0b0f19">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome per le icone -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet CSS per la mappa interattiva -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --accent-color: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.3);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+            background-image: radial-gradient(circle at 50% 20%, #1e1b4b 0%, var(--bg-color) 70%);
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 420px;
+            height: 880px;
+            max-height: 95vh;
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 30px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Header */
+        .app-header {
+            padding: 18px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .app-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .app-title i {
+            color: var(--accent-color);
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            padding: 4px 10px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background-color: #34d399;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #34d399;
+        }
+
+        /* Content Area & Views */
+        .app-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            position: relative;
+        }
+
+        .view-section {
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .view-section.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* AI Assistant Box */
+        .ai-card {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(15, 23, 42, 0.6));
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 20px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .ai-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: var(--accent-color);
+            font-weight: 500;
+        }
+
+        .ai-response {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+            min-height: 40px;
+        }
+
+        .ai-input-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 5px;
+        }
+
+        .ai-input {
+            flex: 1;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 10px 14px;
+            color: var(--text-main);
+            font-size: 0.85rem;
+            outline: none;
+            transition: border 0.3s;
+        }
+
+        .ai-input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .ai-btn {
+            background: var(--accent-color);
+            color: var(--bg-color);
+            border: none;
+            border-radius: 12px;
+            width: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .ai-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Map Container */
+        .map-card {
+            width: 100%;
+            height: 180px;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .map-card.fullscreen {
+            height: 400px;
+        }
+
+        #map, #map-global {
+            width: 100%;
+            height: 100%;
+            background: #0b0f19;
+        }
+
+        /* Section Title */
+        .section-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Satellite Cards */
+        .sat-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .sat-card {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sat-info h4 { font-size: 0.95rem; font-weight: 500; margin-bottom: 4px; }
+        .sat-info p { font-size: 0.75rem; color: var(--text-muted); }
+        .sat-coords { text-align: right; font-size: 0.8rem; }
+        .sat-coords .lat-lon { color: var(--accent-color); font-weight: 500; }
+        .sat-coords .alt { font-size: 0.7rem; color: var(--text-muted); }
+
+        /* LIVE CAM STYLES */
+        .video-container {
+            width: 100%;
+            height: 210px;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            background: #000;
+            position: relative;
+        }
+
+        .video-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .cam-selector {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+
+        .cam-btn {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .cam-btn.active, .cam-btn:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            background: rgba(56, 189, 248, 0.1);
+        }
+
+        /* COUNTDOWN CARD */
+        .countdown-card {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.15), rgba(15, 23, 42, 0.6));
+            border: 1px solid rgba(236, 72, 153, 0.3);
+            border-radius: 16px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .timer-display {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            margin-top: 5px;
+        }
+
+        .timer-unit span {
+            display: block;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #f472b6;
+        }
+
+        .timer-unit label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* News Cards Styles */
+        .news-list { display: flex; flex-direction: column; gap: 12px; }
+        .news-card {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .news-date { font-size: 0.7rem; color: var(--accent-color); font-weight: 500; }
+        .news-card h4 { font-size: 0.9rem; font-weight: 600; color: var(--text-main); }
+        .news-card p { font-size: 0.78rem; color: var(--text-muted); line-height: 1.3; }
+
+        /* AR Compass View & Settings */
+        .card-panel {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .card-panel i { font-size: 2.5rem; color: var(--accent-color); margin-bottom: 5px; }
+        .settings-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.85rem;
+        }
+        .settings-item:last-child { border-bottom: none; }
+
+        /* Bottom Nav */
+        .app-nav {
+            padding: 12px 10px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        .nav-item {
+            color: var(--text-muted);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: color 0.3s;
+            background: none;
+            border: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .nav-item span { font-size: 0.6rem; }
+        .nav-item.active, .nav-item:hover { color: var(--accent-color); }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="app-title">
+                <i class="fa-solid fa-satellite"></i> SkyAI Tracker
+            </div>
+            <div class="status-badge">
+                <div class="status-dot"></div> Live AI Sync
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="app-content">
+            
+            <!-- 1. HOME VIEW -->
+            <div id="view-home" class="view-section active">
+                <div class="ai-card">
+                    <div class="ai-header">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> AI Satellite Assistant
+                    </div>
+                    <div class="ai-response" id="aiResponse">
+                        Ciao! Chiedimi la posizione di un satellite o digita "ISS" per tracciarla live.
+                    </div>
+                    <div class="ai-input-group">
+                        <input type="text" id="aiInput" class="ai-input" placeholder="Es. Dov'è la ISS ora?">
+                        <button class="ai-btn" id="aiSendBtn"><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                </div>
+
+                <div class="section-title"><span>Mappa Orbitale Live</span></div>
+                <div class="map-card">
+                    <div id="map"></div>
+                </div>
+
+                <div class="section-title">
+                    <span>Satelliti in Evidenza</span>
+                    <span style="font-size: 0.75rem; color: var(--text-muted);">Aggiornato live</span>
+                </div>
+                <div class="sat-list">
+                    <div class="sat-card">
+                        <div class="sat-info">
+                            <h4>Stazione Spaziale (ISS)</h4>
+                            <p>Orbita Bassa Terrestre</p>
+                        </div>
+                        <div class="sat-coords">
+                            <div class="lat-lon" id="iss-coords">41.9° N, 12.5° E</div>
+                            <div class="alt">Alt: 420 km</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. GLOBO VIEW -->
+            <div id="view-globe" class="view-section">
+                <div class="section-title"><span>Visualizzazione Globo a Schermo Intero</span></div>
+                <div class="map-card fullscreen">
+                    <div id="map-global"></div>
+                </div>
+            </div>
+
+            <!-- 3. LIVE CAM VIEW -->
+            <div id="view-cam" class="view-section">
+                <div class="section-title">
+                    <span>Streaming Spaziale Live</span>
+                    <span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;"><div class="status-dot" style="background-color: #f87171; box-shadow: 0 0 8px #f87171;"></div> LIVE</span>
+                </div>
+
+                <div class="video-container">
+                    <iframe id="spaceVideo" src="https://www.youtube-nocookie.com/embed/P9C25Un7xaM?autoplay=1&mute=1&controls=1" allowfullscreen></iframe>
+                </div>
+
+                <div class="cam-selector">
+                    <button class="cam-btn active" onclick="changeCam('https://www.youtube-nocookie.com/embed/P9C25Un7xaM?autoplay=1&mute=1', this)"><i class="fa-solid fa-earth-americas"></i> ISS HD Earth</button>
+                    <button class="cam-btn" onclick="changeCam('https://www.youtube-nocookie.com/embed/21X5lGlDOfg?autoplay=1&mute=1', this)"><i class="fa-solid fa-shuttle-space"></i> NASA TV</button>
+                    <button class="cam-btn" onclick="changeCam('https://www.youtube-nocookie.com/embed/DDU-rZs-B4w?autoplay=1&mute=1', this)"><i class="fa-solid fa-space-shuttle"></i> Space Cam 2</button>
+                </div>
+
+                <div class="card-panel" style="text-align: left; padding: 15px;">
+                    <h4 style="font-size: 0.85rem; color: var(--accent-color);"><i class="fa-solid fa-info-circle"></i> Informazioni sullo Stream</h4>
+                    <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">In diretta dalla Stazione Spaziale Internazionale mentre orbita a 28.000 km/h sopra la Terra.</p>
+                </div>
+            </div>
+
+            <!-- 4. NOTIZIE & LANCI VIEW -->
+            <div id="view-news" class="view-section">
+                <div class="countdown-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.8rem; font-weight: 600; color: #f472b6;"><i class="fa-solid fa-rocket"></i> Prossimo Lancio Spaziale</span>
+                        <span style="font-size: 0.7rem; color: var(--text-muted);">Falcon 9 • SpaceX</span>
+                    </div>
+                    <div class="timer-display">
+                        <div class="timer-unit"><span id="cd-hours">04</span><label>Ore</label></div>
+                        <div class="timer-unit"><span id="cd-mins">22</span><label>Minuti</label></div>
+                        <div class="timer-unit"><span id="cd-secs">15</span><label>Secondi</label></div>
+                    </div>
+                </div>
+
+                <div class="section-title"><span>Ultime Notizie Spaziali</span></div>
+                <div class="news-list">
+                    <div class="news-card">
+                        <span class="news-date">Oggi, 10:30 • NASA</span>
+                        <h4>Nuova missione di rifornimento diretta verso la ISS</h4>
+                        <p>Il cargo commerciale è decollato con successo portando esperimenti scientifici e provviste per l'equipaggio.</p>
+                    </div>
+                    <div class="news-card">
+                        <span class="news-date">Ieri • ESA</span>
+                        <h4>Lancio riuscito per la costellazione ambientale</h4>
+                        <p>I nuovi satelliti ad altissima risoluzione sono entrati correttamente nell'orbita eliosincrona prevista.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. BUSSOLA / AR VIEW -->
+            <div id="view-compass" class="view-section">
+                <div class="section-title"><span>Cielo in Tempo Reale (AR)</span></div>
+                <div class="card-panel">
+                    <i class="fa-solid fa-compass fa-spin" style="animation-duration: 10s;"></i>
+                    <h3 style="font-size: 1rem; font-weight: 600;">Modalità Sky View</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted);">Punta il tuo smartphone verso l'alto per visualizzare i satelliti in transito sopra la tua posizione attuale.</p>
+                    <button class="ai-btn" style="width: 100%; border-radius: 12px; padding: 10px; font-weight: 500; margin-top: 10px;" onclick="playSciFiBeep()">Attiva Sensori Bussola</button>
+                </div>
+            </div>
+
+            <!-- 6. IMPOSTAZIONI VIEW -->
+            <div id="view-settings" class="view-section">
+                <div class="section-title"><span>Impostazioni App</span></div>
+                <div class="card-panel" style="text-align: left;">
+                    <div class="settings-item">
+                        <span>Effetti Sonori Sci-Fi</span>
+                        <input type="checkbox" id="audioToggle" checked>
+                    </div>
+                    <div class="settings-item">
+                        <span>Notifiche Passaggio ISS</span>
+                        <input type="checkbox" checked>
+                    </div>
+                    <div class="settings-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                        <span>Chiave API N2YO / OpenAI Personalizzata</span>
+                        <input type="password" class="ai-input" placeholder="Incolla chiave API..." style="width: 100%;">
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Navigation Bar -->
+        <nav class="app-nav">
+            <button class="nav-item active" onclick="switchView('home', this)"><i class="fa-solid fa-house"></i><span>Home</span></button>
+            <button class="nav-item" onclick="switchView('globe', this)"><i class="fa-solid fa-globe"></i><span>Globo</span></button>
+            <button class="nav-item" onclick="switchView('cam', this)"><i class="fa-solid fa-video"></i><span>Live Cam</span></button>
+            <button class="nav-item" onclick="switchView('news', this)"><i class="fa-solid fa-newspaper"></i><span>Notizie</span></button>
+            <button class="nav-item" onclick="switchView('compass', this)"><i class="fa-solid fa-compass"></i><span>AR View</span></button>
+            <button class="nav-item" onclick="switchView('settings', this)"><i class="fa-solid fa-gear"></i><span>Options</span></button>
+        </nav>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- JavaScript Logica dell'App -->
+    <script>
+        function playSciFiBeep(freq = 880, duration = 0.08) {
+            const toggle = document.getElementById('audioToggle');
+            if(toggle && !toggle.checked) return;
+
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, ctx.currentTime);
+                gain.gain.setValueAtTime(0.05, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + duration);
+            } catch(e) {}
+
+            if (navigator.vibrate) navigator.vibrate(15);
+        }
+
+        function switchView(viewName, element) {
+            playSciFiBeep(600, 0.05);
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById('view-' + viewName).classList.add('active');
+            element.classList.add('active');
+
+            if(viewName === 'globe' && window.globalMap) {
+                setTimeout(() => { window.globalMap.invalidateSize(); }, 200);
+            }
+        }
+
+        function changeCam(url, btn) {
+            playSciFiBeep(750, 0.06);
+            document.getElementById('spaceVideo').src = url;
+            document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([41.9, 12.5], 2);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+
+        const globalMap = L.map('map-global', { zoomControl: true, attributionControl: false }).setView([41.9, 12.5], 3);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(globalMap);
+        window.globalMap = globalMap;
+
+        const issIcon = L.divIcon({
+            className: 'custom-iss-marker',
+            html: '<i class="fa-solid fa-satellite" style="color: #38bdf8; font-size: 18px; filter: drop-shadow(0 0 6px #38bdf8);"></i>',
+            iconSize: [20, 20], iconAnchor: [10, 10]
+        });
+
+        let issMarkerHome = L.marker([41.9, 12.5], { icon: issIcon }).addTo(map);
+        let issMarkerGlobal = L.marker([41.9, 12.5], { icon: issIcon }).addTo(globalMap);
+
+        const aiInput = document.getElementById('aiInput');
+        const aiSendBtn = document.getElementById('aiSendBtn');
+        const aiResponse = document.getElementById('aiResponse');
+        const issCoords = document.getElementById('iss-coords');
+
+        function handleAIQuery(query) {
+            playSciFiBeep(1200, 0.1);
+            const q = query.toLowerCase();
+            aiResponse.innerHTML = "Analisi dati orbitali in corso...";
+            
+            setTimeout(() => {
+                if (q.includes('iss') || q.includes('stazione')) {
+                    aiResponse.innerHTML = "La ISS si trova in rotta di sorvolo. Guarda la mappa o lo stream Live Cam!";
+                } else if (q.includes('hubble')) {
+                    aiResponse.innerHTML = "Telescopio Hubble in perfette condizioni operative.";
+                } else {
+                    aiResponse.innerHTML = `Analisi completata per "${query}". Orbita stabile confermata.`;
+                }
+            }, 600);
+        }
+
+        aiSendBtn.addEventListener('click', () => {
+            if (aiInput.value.trim() !== '') { handleAIQuery(aiInput.value); aiInput.value = ''; }
+        });
+
+        aiInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && aiInput.value.trim() !== '') { handleAIQuery(aiInput.value); aiInput.value = ''; }
+        });
+
+        setInterval(() => {
+            let currentLat = 41.9 + (Math.random() * 2 - 1);
+            let currentLon = 12.5 + (Math.random() * 4 - 2);
+            issCoords.innerText = `${currentLat.toFixed(1)}° N, ${currentLon.toFixed(1)}° E`;
+            issMarkerHome.setLatLng([currentLat, currentLon]);
+            map.panTo([currentLat, currentLon], { animate: true, duration: 1.5 });
+            issMarkerGlobal.setLatLng([currentLat, currentLon]);
+        }, 5000);
+
+        let totalSeconds = 15735;
+        setInterval(() => {
+            if (totalSeconds > 0) {
+                totalSeconds--;
+                let hrs = Math.floor(totalSeconds / 3600);
+                let mins = Math.floor((totalSeconds % 3600) / 60);
+                let secs = totalSeconds % 60;
+                document.getElementById('cd-hours').innerText = String(hrs).padStart(2, '0');
+                document.getElementById('cd-mins').innerText = String(mins).padStart(2, '0');
+                document.getElementById('cd-secs').innerText = String(secs).padStart(2, '0');
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
